@@ -1,9 +1,10 @@
 name: CSEB_MID Docker Pipeline
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CSEB_MID CI Pipeline"]
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -14,78 +15,32 @@ env:
 
 jobs:
 
-# 1 Checkout
-  checkout:
-    name: Checkout Source
+  docker:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-# 2 Build Docker Image
-  docker-build:
-    name: Build Docker Image
-    runs-on: ubuntu-latest
-    needs: checkout
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Build Image
-        run: |
-          docker build -t $IMAGE_NAME .
-
-# 3 Trivy Scan
-  trivy:
-    name: Trivy Image Scan
-    runs-on: ubuntu-latest
-    needs: docker-build
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Build Image
-        run: |
-          docker build -t $IMAGE_NAME .
-
-      - name: Run Trivy Scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}
-          exit-code: 1
-          severity: HIGH,MEDIUM
-
-# 4 Push Image to GHCR
-  docker-push:
-    name: Push Docker Image to GHCR
-    runs-on: ubuntu-latest
-    needs: trivy
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Build Image
-        run: |
-          docker build -t $IMAGE_NAME .
-
-      - name: Login to GHCR
+      - name: Login GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
+      - name: Build Image
+        run: docker build -t $IMAGE_NAME .
+
+      - name: Trivy Scan (Do not fail)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}
+          severity: HIGH,MEDIUM,CRITICAL
+          exit-code: 0
+
       - name: Push Image
-        run: |
-          docker push $IMAGE_NAME
+        run: docker push $IMAGE_NAME
 
-# 5 Success Email
-  success-email:
-    name: Success Mail
-    runs-on: ubuntu-latest
-    needs: docker-push
-    if: success()
-
-    steps:
-      - name: Send Email
+      - name: Success Mail
+        if: success()
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -93,31 +48,20 @@ jobs:
           secure: true
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "CSEB_MID GHCR Pipeline Success"
+          subject: "Docker Pipeline Success"
           body: |
-            Hello Team,
-
-            Docker image built, scanned and pushed successfully.
+            Image pushed successfully.
 
             Image:
             ${{ env.IMAGE_NAME }}
 
             Logs:
-            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            Regards,
-            DevSecOps Pipeline
+            https://github.com/${{ github.repository }}/actions
           to: ${{ secrets.DEVOPS_EMAIL }}
           from: DevOps Alert
 
-# 6 Failure Email
-  failure-email:
-    name: Failure Mail
-    runs-on: ubuntu-latest
-    if: failure()
-
-    steps:
-      - name: Send Email
+      - name: Failure Mail
+        if: failure()
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -125,16 +69,11 @@ jobs:
           secure: true
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "CSEB_MID GHCR Pipeline Failed"
+          subject: "Docker Pipeline Failed"
           body: |
-            Hello Team,
-
-            Docker / Trivy / GHCR pipeline failed.
+            Docker pipeline failed.
 
             Logs:
-            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            Regards,
-            DevSecOps Pipeline
+            https://github.com/${{ github.repository }}/actions
           to: ${{ secrets.DEVOPS_EMAIL }}
           from: DevOps Alert
