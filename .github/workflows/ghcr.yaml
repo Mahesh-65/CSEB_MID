@@ -2,7 +2,8 @@ name: CSEB_MID Docker Pipeline
 
 on:
   workflow_run:
-    workflows: ["CSEB_MID CI Pipeline"]
+    workflows:
+      - CSEB_MID CI Pipeline
     types:
       - completed
 
@@ -16,30 +17,34 @@ env:
 jobs:
 
   docker:
+    name: Build Scan Push GHCR
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-      - name: Login GHCR
+      - name: Login to GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Build Image
-        run: docker build -t $IMAGE_NAME .
+      - name: Build Docker Image
+        run: |
+          docker build -t $IMAGE_NAME .
 
-      - name: Trivy Scan (Do not fail)
+      - name: Trivy Scan (Do Not Fail Pipeline)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.IMAGE_NAME }}
           severity: HIGH,MEDIUM,CRITICAL
           exit-code: 0
 
-      - name: Push Image
-        run: docker push $IMAGE_NAME
+      - name: Push Image to GHCR
+        run: |
+          docker push $IMAGE_NAME
 
-      - name: Success Mail
+      - name: Send Success Email
         if: success()
         uses: dawidd6/action-send-mail@v3
         with:
@@ -48,19 +53,24 @@ jobs:
           secure: true
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "Docker Pipeline Success"
+          subject: "CSEB_MID Docker Pipeline Success"
           body: |
-            Image pushed successfully.
+            Hello Team,
+
+            Docker image built, scanned and pushed successfully.
 
             Image:
             ${{ env.IMAGE_NAME }}
 
             Logs:
             https://github.com/${{ github.repository }}/actions
+
+            Regards,
+            DevSecOps Pipeline
           to: ${{ secrets.DEVOPS_EMAIL }}
           from: DevOps Alert
 
-      - name: Failure Mail
+      - name: Send Failure Email
         if: failure()
         uses: dawidd6/action-send-mail@v3
         with:
@@ -69,11 +79,16 @@ jobs:
           secure: true
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "Docker Pipeline Failed"
+          subject: "CSEB_MID Docker Pipeline Failed"
           body: |
+            Hello Team,
+
             Docker pipeline failed.
 
             Logs:
             https://github.com/${{ github.repository }}/actions
+
+            Regards,
+            DevSecOps Pipeline
           to: ${{ secrets.DEVOPS_EMAIL }}
           from: DevOps Alert
