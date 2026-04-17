@@ -9,6 +9,9 @@ permissions:
   contents: read
   packages: write
 
+env:
+  IMAGE_NAME: ghcr.io/mahesh-65/cseb_mid:latest
+
 jobs:
 
 # 1 Checkout
@@ -31,7 +34,7 @@ jobs:
 
       - name: Build Image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/cseb_mid:latest .
+          docker build -t $IMAGE_NAME .
 
 # 3 Trivy Scan
   trivy:
@@ -44,12 +47,12 @@ jobs:
 
       - name: Build Image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/cseb_mid:latest .
+          docker build -t $IMAGE_NAME .
 
       - name: Run Trivy Scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/cseb_mid:latest
+          image-ref: ${{ env.IMAGE_NAME }}
           exit-code: 1
           severity: HIGH,MEDIUM
 
@@ -64,7 +67,7 @@ jobs:
 
       - name: Build Image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/cseb_mid:latest .
+          docker build -t $IMAGE_NAME .
 
       - name: Login to GHCR
         run: |
@@ -72,7 +75,7 @@ jobs:
 
       - name: Push Image
         run: |
-          docker push ghcr.io/${{ github.repository_owner }}/cseb_mid:latest
+          docker push $IMAGE_NAME
 
 # 5 Success Email
   success-email:
@@ -90,14 +93,14 @@ jobs:
           secure: true
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "✅ CSEB_MID GHCR Pipeline Success"
+          subject: "CSEB_MID GHCR Pipeline Success"
           body: |
             Hello Team,
 
             Docker image built, scanned and pushed successfully.
 
             Image:
-            ghcr.io/${{ github.repository_owner }}/cseb_mid:latest
+            ${{ env.IMAGE_NAME }}
 
             Logs:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
